@@ -75,7 +75,7 @@ def GetProcessName(handle):
     if GetModuleBaseName(handle, None, buffer, 256) > 0:
         return buffer.value
     else:
-        return "erro"
+        return "N/A"
 
 # Retorna informações de uso de memória do processo
 GetProcessMemoryInfo = psapi.GetProcessMemoryInfo
@@ -91,8 +91,7 @@ def GetProcessMemoryInfos(handle):
         # Retorno em bytes, 1024 ** 2 é a quantidade de bytes em um MB
         return mem_infos.PeakWorkingSetSize / (1024 ** 2), mem_infos.WorkingSetSize / (1024 ** 2)
     else:
-        print("Erro para coletar informação de memória")
-        return (0, 0)
+        return (-1, -1)
 
 # Abre o token do processo
 OpenProcessToken = advapi32.OpenProcessToken
@@ -106,11 +105,14 @@ GetTokenInformation.restype = wintypes.BOOL
 LookupAccountSid = advapi32.LookupAccountSidW
 LookupAccountSid.restype = wintypes.BOOL
 
+# Fecha o processo
+CloseHandle = kernel32.CloseHandle
+
 def GetProcessUser(handle):
     token_handle = wintypes.HANDLE()
     # Obtem o token de segurança do processo
     if not OpenProcessToken(handle, TOKEN_QUERY, ctypes.byref(token_handle)):
-        raise ctypes.WinError
+        return "N/A"
     
     try:
         token_user_size = wintypes.DWORD()
@@ -139,23 +141,6 @@ def GetProcessUser(handle):
         return domain.value, name.value
     finally:
         CloseHandle(token_handle)
-    
-
-# Abre o processo e retorna um handle
-OpenProcess = kernel32.OpenProcess
-OpenProcess.restype = wintypes.HANDLE
-
-# Fecha o processo
-CloseHandle = kernel32.CloseHandle
-
-def list_processes():
-    processes = []
-    for pid in GetProcessIDs():
-        handle = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, False, pid)
-        if handle:
-            processes.append((pid, GetProcessName(handle), *GetProcessMemoryInfos(handle), *GetProcessUser(handle)))
-            CloseHandle(handle)
-    return processes
 
 # Retorna estado atual dos threads do sistema
 CreateToolhelp32Snapshot = kernel32.CreateToolhelp32Snapshot
@@ -176,40 +161,66 @@ def GetThreads():
         raise ctypes.WinError()
     
     try:
-        thread_entry = THREAD_INFOS()
-        thread_entry.dwSize = ctypes.sizeof(THREAD_INFOS)
+        thread = THREAD_INFOS()
+        thread.dwSize = ctypes.sizeof(THREAD_INFOS)
         
-        threads = [] 
+        threads = {} 
         # Obtém o primeiro thread do snapshot
-        has_thread = Thread32First(snapshot, ctypes.byref(thread_entry))
+        has_thread = Thread32First(snapshot, ctypes.byref(thread))
         if not has_thread:
-            return [] 
+            return {} 
         
         # Enquanto a função retornar true
         while has_thread:
-            threads.append((
-                thread_entry.th32OwnerProcessID, # ID do processo
-                thread_entry.th32ThreadID,       # ID do thread
-                thread_entry.tpBasePri,          # Prioridade base
-                thread_entry.tpDeltaPri          # Alteração na prioridade
-            ))
-            has_thread = Thread32Next(snapshot, ctypes.byref(thread_entry))
+            pid = thread.th32OwnerProcessID
+            # Conjunto com as informações dos threads
+            thread_info = {
+                "thread_id": thread.th32ThreadID,    # ID do thread
+                "base_priority": thread.tpBasePri,   # Prioridade base
+                "priority_delta": thread.tpDeltaPri  # Alteração na prioridade
+            }
+
+            # Adiciona o thread na biblioteca, organizando pelo pid do processo
+            if pid not in threads:
+                threads[pid] = []
+            threads[pid].append(thread_info)
+
+            has_thread = Thread32Next(snapshot, ctypes.byref(thread))
         
         return threads
     finally:
         CloseHandle(snapshot)
+    
+# Abre o processo e retorna um handle
+OpenProcess = kernel32.OpenProcess
+OpenProcess.restype = wintypes.HANDLE
 
-# Lista todos os threads
-def list_all_process_threads():
-    processes_with_threads = GetThreads()
-    print(tabulate(processes_with_threads, headers=["ID do processo", "ID", "Base priority", "Delta priority"], tablefmt="grid"))
+def list_processes():
+    processes = {}
+    threads = GetThreads()
+    for pid in GetProcessIDs():
+        try:
+            handle = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, False, pid)
+            if handle:
+
+                processes[pid] = {
+                        "name": GetProcessName(handle), 
+                        "peak_memory": GetProcessMemoryInfos(handle)[0],
+                        "current_memory": GetProcessMemoryInfos(handle)[1],
+                        "user": GetProcessUser(handle),
+                        "threads": threads.get(pid, [])
+                }
+        finally:
+            CloseHandle(handle)
+    return processes
 
 # Exibe os processos
 if __name__ == "__main__":
     process_list = list_processes()
-    if process_list:
-        print(tabulate(process_list, headers=["PID", "Nome", "Pico de uso (MB)", "Uso atual (MB)", "Domínio", "Usuário"], tablefmt="grid"))
-    else:
-        print("Nenhum processo encontrado")
-    
-    list_all_process_threads()
+    for pid, info in process_list.items():
+        print("-------------------------------------------------------------------------")
+        print(f"PID: {pid}, Nome: {info['name']}, Usuário: {info['user']}")
+        print(f"Memória - Pico: {info['peak_memory']} MB, Atual: {info['current_memory']} MB")
+        print("Threads:")
+        for thread in info["threads"]:
+            print(f"  Thread ID: {thread['thread_id']}, Base Priority: {thread['base_priority']}, Priority Delta: {thread['priority_delta']}")
