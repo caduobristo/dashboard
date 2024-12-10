@@ -138,7 +138,7 @@ def GetProcessUser(handle):
         if not LookupAccountSid(None, sid, name, ctypes.byref(name_size), domain, ctypes.byref(domain_size), ctypes.byref(sid_name_use)):
             return "N/A"
 
-        return domain.value, name.value
+        return name.value
     finally:
         CloseHandle(token_handle)
 
@@ -213,14 +213,3 @@ def list_processes():
         finally:
             CloseHandle(handle)
     return processes
-
-# Exibe os processos
-if __name__ == "__main__":
-    process_list = list_processes()
-    for pid, info in process_list.items():
-        print("-------------------------------------------------------------------------")
-        print(f"PID: {pid}, Nome: {info['name']}, Usuário: {info['user']}")
-        print(f"Memória - Pico: {info['peak_memory']} MB, Atual: {info['current_memory']} MB")
-        print("Threads:")
-        for thread in info["threads"]:
-            print(f"  Thread ID: {thread['thread_id']}, Base Priority: {thread['base_priority']}, Priority Delta: {thread['priority_delta']}")
