@@ -202,7 +202,6 @@ def list_processes():
         try:
             handle = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, False, pid)
             if handle:
-
                 processes[pid] = {
                         "name": GetProcessName(handle), 
                         "peak_memory": GetProcessMemoryInfos(handle)[0],
