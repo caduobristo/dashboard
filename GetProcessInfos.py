@@ -1,5 +1,4 @@
 import ctypes
-import os
 from ctypes import wintypes
 
 # Constantes de permissões de acesso ao processo
@@ -16,30 +15,17 @@ advapi32 = ctypes.WinDLL('Advapi32.dll')
 # Estrutura retornada pela função de informações de memória
 class MEMORY_INFOS(ctypes.Structure):
     _fields_ = [
-        ("cb", wintypes.DWORD),             
-        ("PeakWorkingSetSize", ctypes.c_size_t),  # Tamanho máximo da memória em uso
-        ("WorkingSetSize", ctypes.c_size_t),      # Tamanho atual da memória em uso
-        ("QuotaPeakPagedPoolUsage", ctypes.c_size_t), 
-        ("QuotaPagedPoolUsage", ctypes.c_size_t),     
-        ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t), 
-        ("QuotaNonPagedPoolUsage", ctypes.c_size_t),     
-        ("PagefileUsage", ctypes.c_size_t),    
-        ("PeakPagefileUsage", ctypes.c_size_t),  
+        ("cb", wintypes.DWORD),                       # Tamanho da estrutura (em bytes)
+        ("PeakWorkingSetSize", ctypes.c_size_t),      # Máximo de memória física usada
+        ("WorkingSetSize", ctypes.c_size_t),          # Memória física usada atualmente
+        ("QuotaPeakPagedPoolUsage", ctypes.c_size_t), # Máximo de memória do pool paginado usada
+        ("QuotaPagedPoolUsage", ctypes.c_size_t),     # Memória atual do pool paginado usada
+        ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t), # Máximo de memória do pool não paginado usada
+        ("QuotaNonPagedPoolUsage", ctypes.c_size_t),  # Memória atual do pool não paginado usada
+        ("PagefileUsage", ctypes.c_size_t),           # Tamanho do arquivo de paginação usado atualmente
+        ("PeakPagefileUsage", ctypes.c_size_t),       # Máximo de uso do arquivo de paginação
     ]
-
-class MEMORYSTATUSEX(ctypes.Structure):
-    _fields_ = [
-        ("dwLength", ctypes.c_ulong),
-        ("dwMemoryLoad", ctypes.c_ulong),
-        ("ullTotalPhys", ctypes.c_ulonglong),
-        ("ullAvailPhys", ctypes.c_ulonglong),
-        ("ullTotalPageFile", ctypes.c_ulonglong),
-        ("ullAvailPageFile", ctypes.c_ulonglong),
-        ("ullTotalVirtual", ctypes.c_ulonglong),
-        ("ullAvailVirtual", ctypes.c_ulonglong),
-        ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
-    ]
-
+    
 # Estruturas retornadas pelas funções de informações de usuários
 class SID_AND_ATTRIBUTES(ctypes.Structure):
     _fields_ = [
@@ -226,69 +212,3 @@ def list_processes():
             CloseHandle(handle)
     return processes
 
-# Obtém informações de CPU usando GetSystemTimes
-def get_cpu_usage():
-    kernel32 = ctypes.windll.kernel32
-
-    class FILETIME(ctypes.Structure):
-        _fields_ = [
-            ("dwLowDateTime", ctypes.c_uint),
-            ("dwHighDateTime", ctypes.c_uint),
-        ]
-
-    idle_time = FILETIME()
-    kernel_time = FILETIME()
-    user_time = FILETIME()
-
-    kernel32.GetSystemTimes(
-        ctypes.byref(idle_time), ctypes.byref(kernel_time), ctypes.byref(user_time)
-    )
-
-    def filetime_to_int(filetime):
-        return (filetime.dwHighDateTime << 32) | filetime.dwLowDateTime
-
-    idle = filetime_to_int(idle_time)
-    kernel = filetime_to_int(kernel_time)
-    user = filetime_to_int(user_time)
-
-    total = kernel + user
-    return round((total - idle) / total * 100, 2)
-
-# Obtém informações de memória usando GlobalMemoryStatusEx
-def get_memory_info():
-    kernel32 = ctypes.windll.kernel32
-    memory_status = MEMORYSTATUSEX()
-    memory_status.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
-    kernel32.GlobalMemoryStatusEx(ctypes.byref(memory_status))
-
-    return {
-        "total": round(memory_status.ullTotalPhys / (1024**3), 2),  # Em GB
-        "available": round(memory_status.ullAvailPhys / (1024**3), 2),
-        "used": round(
-            (memory_status.ullTotalPhys - memory_status.ullAvailPhys) / (1024**3), 2
-        ),
-        "percent": memory_status.dwMemoryLoad,
-    }
-
-# Obtém informações de disco usando GetDiskFreeSpaceEx
-def get_disk_info():
-    kernel32 = ctypes.windll.kernel32
-    free_bytes = ctypes.c_ulonglong(0)
-    total_bytes = ctypes.c_ulonglong(0)
-    total_free_bytes = ctypes.c_ulonglong(0)
-
-    kernel32.GetDiskFreeSpaceExW(
-        ctypes.c_wchar_p(os.getenv("SystemDrive") + "\\"),  # Disco principal
-        ctypes.byref(free_bytes),
-        ctypes.byref(total_bytes),
-        ctypes.byref(total_free_bytes),
-    )
-
-    return {
-        "total": round(total_bytes.value / (1024**3), 2),  # Em GB
-        "used": round((total_bytes.value - free_bytes.value) / (1024**3), 2),
-        "free": round(free_bytes.value / (1024**3), 2),
-        "percent": round(
-            (total_bytes.value - free_bytes.value) / total_bytes.value * 100, 2
-        ),
-    }

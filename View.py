@@ -4,13 +4,13 @@ from tkinter import ttk
 class View:
     def __init__(self, root):
         self.root = root
-        root.title("Dashboard de recursos do sistema")
-        root.state("zoomed")
-
-        self.global_info = tk.Label(root, text="Carregando informações globais...")
-        self.global_info.pack(pady=10)
+        self.global_info = tk.Label(self.root, text="Carregando informações...")
+        self.global_info.pack(pady=20)
 
     def create_dashboard(self):
+        self.root.title("Dashboard de recursos do sistema")
+        self.root.state("zoomed")
+
         self.tree = ttk.Treeview(self.root)
         self.tree["columns"] = ("Uso de memória", "Número de threads", "Usuário")
 
@@ -32,17 +32,16 @@ class View:
     def display(self, processes, global_data):
         # Exibir informações globais
         if global_data:
-            cpu_usage = global_data.get("cpu_usage", "N/A")
-            memory = global_data.get("memory", {})
-            disk = global_data.get("disk", {})
-
             self.global_info.config(
                 text=(
-                    f"CPU: {cpu_usage}% | "
-                    f"Memória: {memory.get('used', 'N/A')}GB/{memory.get('total', 'N/A')}GB "
-                    f"({memory.get('percent', 'N/A')}%) | "
-                    f"Disco: {disk.get('used', 'N/A')}GB/{disk.get('total', 'N/A')}GB "
-                    f"({disk.get('percent', 'N/A')}%)"
+                    f"CPU - Uso total: {global_data['cpu_usage']}% | Ocioso: {global_data['idle']}% | "
+                    f"Kernel: {global_data['kernel']}% | Usuário: {global_data['user']}% | "
+                    f"Número de processadores: {global_data['n_processors']} | "
+                    f"Tamanho da página de memória: {global_data['page_size']} \n\n"
+                    f"Memória: {global_data['memory_used']}GB/{global_data['memory_total']}GB "
+                    f"({global_data['memory_percent']}%) | "
+                    f"Disco: {global_data['disk_used']}GB/{global_data['disk_total']}GB "
+                    f"({global_data['disk_percent']}%)"
                 )
             )
 
@@ -76,10 +75,6 @@ class View:
 
 # Função para agrupar processos
 def group_processes(processes):
-    """
-    Agrupa os processos pelo nome do executável.
-    Retorna um dicionário com o nome como chave e a lista de processos como valor.
-    """
     grouped = {}
     for pid, info in processes.items():
         name = info['name']
