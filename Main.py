@@ -9,7 +9,6 @@ if __name__ == "__main__":
     root = tk.Tk()
 
     view = View(root)
-    view.create_dashboard()
     controller = Controller(model, view)
 
     threading.Thread(target=model.update_data, daemon=True).start()

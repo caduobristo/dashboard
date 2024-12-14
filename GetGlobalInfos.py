@@ -99,7 +99,6 @@ def get_cpu_infos():
     page_size = system_info.dwPageSize 
 
     return {
-        # Converte os valores de tempo para porcentagem
         "idle": percent_idle,                           
         "kernel": percent_kernel,                   
         "user": percent_user,                          

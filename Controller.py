@@ -14,5 +14,5 @@ class Controller:
             
             # Certifique-se de que ambos os dados são passados para a View
             self.view.display(process_data, global_data)
-            time.sleep(3)
+            time.sleep(10)
 

@@ -21,7 +21,7 @@ class Model:
                 disk_infos = get_disk_info()
 
                 global_data = {
-                    "cpu_usage": cpu_infos.get('cpu_usage', 'N/A'),
+                    "cpu_usage": cpu_infos['cpu_usage'],
                     "idle": cpu_infos.get('idle', 'N/A'),
                     "kernel": cpu_infos.get('kernel', 'N/A'),
                     "user": cpu_infos.get('user', 'N/A'),

@@ -286,7 +286,7 @@ def list_processes():
                 times = GetProcessCPUUsage(handle)
                 processes[pid] = {
                         "name": GetProcessName(handle),
-                        "creation_time": times['cpu_usage'],
+                        "creation_time": times['creation'],
                         "exit_time": times['exit'],
                         "kernel_time": times['kernel'],
                         "user_time": times['user'],

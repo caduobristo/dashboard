@@ -4,31 +4,105 @@ from tkinter import ttk
 class View:
     def __init__(self, root):
         self.root = root
-        self.global_info = tk.Label(self.root, text="Carregando informações...")
-        self.global_info.pack(pady=20)
-
-    def create_dashboard(self):
         self.root.title("Dashboard de recursos do sistema")
         self.root.state("zoomed")
 
-        self.tree = ttk.Treeview(self.root)
-        self.tree["columns"] = ("Usuário", "Número de threads", "Uso de Memória")
+        self.menu = tk.Menu(self.root)
+        self.root.config(menu=self.menu)
+
+        self.menu.add_command(label="Tela Principal", command=self.show_main_screen)
+        self.menu.add_command(label="Dados Detalhados", command=self.show_details_screen)
+
+        self.main_frame = tk.Frame(self.root)
+        self.details_frame = tk.Frame(self.root)
+
+        self.create_main_screen()
+        self.create_details_screen()
+
+        self.show_main_screen()
+
+    def create_main_screen(self):
+        self.global_info = tk.Label(self.main_frame, text="Carregando informações...")
+        self.global_info.pack(pady=20)
+
+        tree_frame = tk.Frame(self.main_frame)
+        tree_frame.pack(expand=True, fill=tk.BOTH)
+
+        scroll = ttk.Scrollbar(tree_frame, orient="vertical")
+        scroll.pack(side=tk.RIGHT, fill=tk.Y)
+
+        self.global_tree = ttk.Treeview(
+            tree_frame,
+            yscrollcommand=scroll.set
+        )
+        self.global_tree["columns"] = ("Usuário", "Número de threads", "Uso de Memória")
 
         # Configuração das colunas
-        self.tree.column("#0", width=200, anchor=tk.W)
-        self.tree.heading("#0", text="Nome / PID", anchor=tk.W)
+        self.global_tree.column("#0", width=200, anchor=tk.W)
+        self.global_tree.heading("#0", text="Nome / PID", anchor=tk.W)
 
-        self.tree.column("Usuário", width=200, anchor=tk.W)
-        self.tree.heading("Usuário", text="Usuário")
+        self.global_tree.column("Usuário", width=200, anchor=tk.W)
+        self.global_tree.heading("Usuário", text="Usuário")
 
-        self.tree.column("Número de threads", width=200, anchor=tk.W)
-        self.tree.heading("Número de threads", text="Número de threads")
+        self.global_tree.column("Número de threads", width=200, anchor=tk.W)
+        self.global_tree.heading("Número de threads", text="Número de threads")
 
-        self.tree.column("Uso de Memória", width=200, anchor=tk.W)
-        self.tree.heading("Uso de Memória", text="Uso de Memória")
+        self.global_tree.column("Uso de Memória", width=200, anchor=tk.W)
+        self.global_tree.heading("Uso de Memória", text="Uso de Memória")
 
-        self.tree.pack(expand=True, fill=tk.BOTH)
+        self.global_tree.pack(expand=True, fill=tk.BOTH)
 
+        scroll.config(command=self.global_tree.yview)
+
+    def create_details_screen(self):
+        self.details_info = tk.Label(self.details_frame, text="Informações detalhadas de cada processo")
+        self.details_info.pack(pady=20)
+
+        tree_frame = tk.Frame(self.details_frame)
+        tree_frame.pack(expand=True, fill=tk.BOTH)
+
+        scroll = ttk.Scrollbar(tree_frame, orient="vertical")
+        scroll.pack(side=tk.RIGHT, fill=tk.Y)
+
+        self.details_tree = ttk.Treeview(
+            tree_frame,
+            yscrollcommand=scroll.set,
+        )
+        self.details_tree["columns"] = ("PID", "Prioridade", "Usuário", "Tempo de kernel", "Tempo de usuário", "Status")
+
+
+        self.details_tree.column("#0", width=200, anchor=tk.W)
+        self.details_tree.heading("#0", text="Processo", anchor=tk.W)
+
+        self.details_tree.column("PID", width=200, anchor=tk.W)
+        self.details_tree.heading("PID", text="PID", anchor=tk.W)
+
+        self.details_tree.column("Prioridade", width=200, anchor=tk.W)
+        self.details_tree.heading("Prioridade", text="Prioridade", anchor=tk.W)
+
+        self.details_tree.column("Usuário", width=200, anchor=tk.W)
+        self.details_tree.heading("Usuário", text="Usuário", anchor=tk.W)
+
+        self.details_tree.column("Tempo de kernel", width=200, anchor=tk.W)
+        self.details_tree.heading("Tempo de kernel", text="Tempo de kernel", anchor=tk.W)
+
+        self.details_tree.column("Tempo de usuário", width=200, anchor=tk.W)
+        self.details_tree.heading("Tempo de usuário", text="Tempo de usuário", anchor=tk.W)
+
+        self.details_tree.column("Status", width=200, anchor=tk.W)
+        self.details_tree.heading("Status", text="Status", anchor=tk.W)
+
+        self.details_tree.pack(expand=True, fill=tk.BOTH)
+        scroll.config(command=self.details_tree.yview)
+
+    def show_main_screen(self):
+        self.details_frame.pack_forget()
+        self.main_frame.pack(expand=True, fill=tk.BOTH)
+
+    def show_details_screen(self):
+        self.main_frame.pack_forget()
+        self.details_frame.pack(expand=True, fill=tk.BOTH)
+    
     def display(self, processes, global_data):
         # Exibir informações globais
         if global_data:
@@ -46,8 +120,11 @@ class View:
             )
 
         # Atualizar processos
-        for item in self.tree.get_children():
-            self.tree.delete(item)
+        for item in self.global_tree.get_children():
+            self.global_tree.delete(item)
+
+        for item in self.details_tree.get_children():
+                self.details_tree.delete(item)
 
         grouped = group_processes(processes)
 
@@ -56,13 +133,13 @@ class View:
             memory_usage = sum(p['current_memory'] for p in processes)
             n_threads = sum(len(p['threads']) for p in processes)
 
-            parent = self.tree.insert(
+            parent = self.global_tree.insert(
                 "", "end", text=f"{name} ({len(processes)})",
                 values=(user, f"{n_threads}", f"{memory_usage:.2f} MB")
             )
 
             for process in processes:
-                self.tree.insert(
+                self.global_tree.insert(
                     parent,
                     "end",
                     text=f"PID: {process['pid']}",
@@ -71,6 +148,21 @@ class View:
                         f"{len(process['threads'])}",
                         f"{process['current_memory']}",
                     ),
+                )
+
+                status = 'Em execução' if process['exit_time'] == 0 else 'Suspenso'
+                self.details_tree.insert(
+                    "",
+                    "end",
+                    text=process['name'],
+                    values=(
+                        process['pid'],
+                        process['priority'],
+                        process['user'],
+                        f"{process['kernel_time']} s",
+                        f"{process['user_time']} s",
+                        status,
+                    )
                 )
 
 # Função para agrupar processos
