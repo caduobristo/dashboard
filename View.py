@@ -12,20 +12,20 @@ class View:
         self.root.state("zoomed")
 
         self.tree = ttk.Treeview(self.root)
-        self.tree["columns"] = ("Uso de memória", "Número de threads", "Usuário")
+        self.tree["columns"] = ("Usuário", "Número de threads", "Uso de Memória")
 
         # Configuração das colunas
         self.tree.column("#0", width=200, anchor=tk.W)
         self.tree.heading("#0", text="Nome / PID", anchor=tk.W)
 
-        self.tree.column("Uso de memória", width=200, anchor=tk.W)
-        self.tree.heading("Uso de memória", text="Uso de memória")
+        self.tree.column("Usuário", width=200, anchor=tk.W)
+        self.tree.heading("Usuário", text="Usuário")
 
         self.tree.column("Número de threads", width=200, anchor=tk.W)
         self.tree.heading("Número de threads", text="Número de threads")
 
-        self.tree.column("Usuário", width=200, anchor=tk.W)
-        self.tree.heading("Usuário", text="Usuário")
+        self.tree.column("Uso de Memória", width=200, anchor=tk.W)
+        self.tree.heading("Uso de Memória", text="Uso de Memória")
 
         self.tree.pack(expand=True, fill=tk.BOTH)
 
@@ -52,13 +52,13 @@ class View:
         grouped = group_processes(processes)
 
         for name, processes in grouped.items():
-            total_memory = sum(p['current_memory'] for p in processes)
-            total_threads = sum(len(p['threads']) for p in processes)
             user = processes[0]['user']
+            memory_usage = sum(p['current_memory'] for p in processes)
+            n_threads = sum(len(p['threads']) for p in processes)
 
             parent = self.tree.insert(
                 "", "end", text=f"{name} ({len(processes)})",
-                values=(f"{total_memory:.2f} MB", total_threads, user)
+                values=(user, f"{n_threads}", f"{memory_usage:.2f} MB")
             )
 
             for process in processes:
@@ -67,9 +67,9 @@ class View:
                     "end",
                     text=f"PID: {process['pid']}",
                     values=(
-                        f"{process['current_memory']:.2f} MB",
+                        f"{user}",
                         f"{len(process['threads'])}",
-                        f"{process['user']}",
+                        f"{process['current_memory']}",
                     ),
                 )
 

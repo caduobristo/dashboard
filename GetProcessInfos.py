@@ -1,4 +1,5 @@
 import ctypes
+import time
 from ctypes import wintypes
 
 # Constantes de permissões de acesso ao processo
@@ -6,6 +7,7 @@ PROCESS_QUERY_INFORMATION = 0x0400
 PROCESS_VM_READ = 0x0010
 TOKEN_QUERY = 0x0008
 TH32CS_SNAPTHREAD = 0x00000004
+THREAD_QUERY_INFORMATION = 0x0040
 
 # Bibliotecas do sistema para manipular processos
 psapi = ctypes.WinDLL('Psapi.dll')
@@ -48,6 +50,13 @@ class THREAD_INFOS(ctypes.Structure):
         ("tpBasePri", wintypes.LONG),      # Prioridade base do thread
         ("tpDeltaPri", wintypes.LONG),     # Alteração na prioridade
         ("dwFlags", wintypes.DWORD),       # Reservado, não usado
+    ]
+
+# Estrutura de retorno do tempo dos threads
+class FILETIME(ctypes.Structure):
+    _fields_ = [
+        ("dwLowDateTime", ctypes.c_uint),
+        ("dwHighDateTime", ctypes.c_uint),
     ]
 
 # Enumera os processos do sistema
@@ -141,6 +150,73 @@ def GetProcessUser(handle):
     finally:
         CloseHandle(token_handle)
 
+GetProcessTimes = kernel32.GetProcessTimes
+GetProcessTimes.restype = wintypes.BOOL
+
+previously = {"kernel": 0, "user": 0}
+
+def GetProcessCPUUsage(handle):
+    global previously
+    creation = FILETIME()
+    exit = FILETIME()
+    kernel = FILETIME()
+    user = FILETIME()
+
+    if GetProcessTimes(handle, ctypes.byref(creation), ctypes.byref(exit), 
+                       ctypes.byref(kernel), ctypes.byref(user)):
+        # Converte FILETIME para inteiro (segundos)
+        def filetime_to_int(filetime):
+            return ((filetime.dwHighDateTime << 32) | filetime.dwLowDateTime) / 10000000
+        
+        creation = filetime_to_int(creation)
+        exit = filetime_to_int(exit)
+        kernel = filetime_to_int(kernel)
+        user = filetime_to_int(user)
+
+        return {"creation": creation, "exit": exit, "kernel": kernel, "user": user}
+        
+    return {"creation": 'N/A', "exit": 'N/A', "kernel": 'N/A', "user": 'N/A'}
+
+GetPriorityClass = kernel32.GetPriorityClass
+GetPriorityClass.restype = wintypes.DWORD
+
+def GetProcessPriority(handle):
+    priority = GetPriorityClass(handle)
+    if priority == 0:
+        return "N/A"
+    elif priority == 32:
+        return "Baixa"
+    else:
+        return "Alta"
+
+# Função que retorna os tempos do thread
+GetThreadTimes = kernel32.GetThreadTimes
+GetThreadTimes.restype = wintypes.BOOL
+
+def GetThreadsTimes(thread_id):
+    handle = kernel32.OpenThread(THREAD_QUERY_INFORMATION, False, thread_id)
+    if not handle:
+        return {"kernel": 0, "user":0}
+    
+    def filetime_to_ms(filetime):
+        return ((filetime.dwHighDateTime << 32) | filetime.dwLowDateTime) / 10000
+    
+    try:
+        creation = FILETIME()
+        exit = FILETIME()
+        kernel = FILETIME()
+        user = FILETIME()
+
+        if GetThreadTimes(handle, ctypes.byref(creation), ctypes.byref(exit), 
+                          ctypes.byref(kernel), ctypes.byref(user)):
+            return {
+                "kernel": filetime_to_ms(kernel),
+                "user": filetime_to_ms(user)
+            }
+        return {"kernel": 0, "user":0}
+    finally:
+        CloseHandle(handle)
+
 # Retorna estado atual dos threads do sistema
 CreateToolhelp32Snapshot = kernel32.CreateToolhelp32Snapshot
 CreateToolhelp32Snapshot.restype = wintypes.HANDLE
@@ -172,11 +248,16 @@ def GetThreads():
         # Enquanto a função retornar true
         while has_thread:
             pid = thread.th32OwnerProcessID
+
+            times = GetThreadsTimes(thread.th32ThreadID)
+
             # Conjunto com as informações dos threads
             thread_info = {
                 "thread_id": thread.th32ThreadID,    # ID do thread
                 "base_priority": thread.tpBasePri,   # Prioridade base
-                "priority_delta": thread.tpDeltaPri  # Alteração na prioridade
+                "delta_priority": thread.tpDeltaPri, # Alteração na prioridade
+                "kernel_time": times['kernel'],      # Tempo de kernel 
+                "user_time": times['user']           # Tempo de usuário
             }
 
             # Adiciona o thread na biblioteca, organizando pelo pid do processo
@@ -189,7 +270,7 @@ def GetThreads():
         return threads
     finally:
         CloseHandle(snapshot)
-    
+
 # Abre o processo e retorna um handle
 OpenProcess = kernel32.OpenProcess
 OpenProcess.restype = wintypes.HANDLE
@@ -201,11 +282,18 @@ def list_processes():
         try:
             handle = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, False, pid)
             if handle:
+                memory = GetProcessMemoryInfos(handle)
+                times = GetProcessCPUUsage(handle)
                 processes[pid] = {
-                        "name": GetProcessName(handle), 
-                        "peak_memory": GetProcessMemoryInfos(handle)[0],
-                        "current_memory": GetProcessMemoryInfos(handle)[1],
+                        "name": GetProcessName(handle),
+                        "creation_time": times['cpu_usage'],
+                        "exit_time": times['exit'],
+                        "kernel_time": times['kernel'],
+                        "user_time": times['user'],
+                        "peak_memory": memory[0],
+                        "current_memory": memory[1],
                         "user": GetProcessUser(handle),
+                        "priority": GetProcessPriority(handle),
                         "threads": threads.get(pid, [])
                 }
         finally:

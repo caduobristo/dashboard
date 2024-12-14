@@ -62,9 +62,9 @@ def get_cpu_infos():
         ctypes.byref(idle_time), ctypes.byref(kernel_time), ctypes.byref(user_time)
     )
 
-    # Converte LIFETIME para inteiro (unidades de 100-nanosegundos)
+    # Converte LIFETIME para inteiro (ms)
     def filetime_to_int(filetime):
-        return (filetime.dwHighDateTime << 32) | filetime.dwLowDateTime
+        return ((filetime.dwHighDateTime << 32) | filetime.dwLowDateTime) / 10000
 
     idle = filetime_to_int(idle_time)
     kernel = filetime_to_int(kernel_time)
