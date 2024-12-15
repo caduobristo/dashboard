@@ -1,5 +1,6 @@
 import threading
 import time
+import queue
 from GetProcessInfos import list_processes
 from GetGlobalInfos import get_cpu_infos, get_memory_info, get_disk_info
 
@@ -7,6 +8,7 @@ class Model:
     def __init__(self):
         self.process_data = {}
         self.global_data = {}  # Certifique-se de que isso está inicializado
+        self.data_queue = queue.Queue()
         self.lock = threading.Lock()
 
     def update_data(self):
@@ -36,9 +38,7 @@ class Model:
                 }
 
                 # Atualiza os dados protegidos pelo lock
-                with self.lock:
-                    self.process_data = process_data
-                    self.global_data = global_data
+                self.data_queue.put((process_data, global_data))
 
             except Exception as e:
                 print(f"Erro ao atualizar dados: {e}")

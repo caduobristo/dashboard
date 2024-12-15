@@ -1,4 +1,5 @@
 import time
+import threading
 
 class Controller:
     def __init__(self, model, view):
@@ -7,12 +8,16 @@ class Controller:
         self.running = True
 
     def start(self):
-        while self.running:
-            with self.model.lock:
-                process_data = self.model.process_data.copy()
-                global_data = self.model.global_data.copy()  # Adiciona cópia correta do global_data
-            
-            # Certifique-se de que ambos os dados são passados para a View
-            self.view.display(process_data, global_data)
-            time.sleep(5)
+        def update():
+            try:
+                if not self.model.data_queue.empty():
+                    process_data, global_data = self.model.data_queue.get()
+
+                    self.view.display(process_data, global_data)
+            except Exception as e:
+                print(f"Erro ao atualizar dados na View: {e}")
+
+            self.view.root.after(5000, update)
+
+        update()
 

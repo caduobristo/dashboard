@@ -71,28 +71,17 @@ class View:
             tree_frame,
             yscrollcommand=scroll.set,
         )
-        self.details_tree["columns"] = ("PID", "Prioridade", "Usuário", "Uso da CPU", "Tempo de kernel", "Tempo de usuário")
+        self.details_tree["columns"] = (
+            "PID", "Prioridade", "Usuário", "Uso da CPU", 
+            "Tempo de kernel", "Tempo de usuário", "Thread ID",
+            "Prioridade base", "Prioridade Alterada")
 
         self.details_tree.column("#0", width=200, anchor=tk.W)
         self.details_tree.heading("#0", text="Processo", anchor=tk.W)
 
-        self.details_tree.column("PID", width=200, anchor=tk.W)
-        self.details_tree.heading("PID", text="PID", anchor=tk.W)
-
-        self.details_tree.column("Prioridade", width=200, anchor=tk.W)
-        self.details_tree.heading("Prioridade", text="Prioridade", anchor=tk.W)
-
-        self.details_tree.column("Usuário", width=200, anchor=tk.W)
-        self.details_tree.heading("Usuário", text="Usuário", anchor=tk.W)
-
-        self.details_tree.column("Uso da CPU", width=200, anchor=tk.W)
-        self.details_tree.heading("Uso da CPU", text="Uso da CPU", anchor=tk.W)
-
-        self.details_tree.column("Tempo de kernel", width=200, anchor=tk.W)
-        self.details_tree.heading("Tempo de kernel", text="Tempo de kernel", anchor=tk.W)
-
-        self.details_tree.column("Tempo de usuário", width=200, anchor=tk.W)
-        self.details_tree.heading("Tempo de usuário", text="Tempo de usuário", anchor=tk.W)
+        for col in self.details_tree["columns"]:
+            self.details_tree.column(col, width=150, anchor=tk.W)
+            self.details_tree.heading(col, text=col, anchor=tk.W)
 
         self.details_tree.pack(expand=True, fill=tk.BOTH)
         scroll.config(command=self.details_tree.yview)
@@ -176,14 +165,14 @@ class View:
             memory_usage = sum(p['current_memory'] for p in processes)
             n_threads = sum(len(p['threads']) for p in processes)
 
-            parent = self.global_tree.insert(
+            parent_global = self.global_tree.insert(
                 "", "end", text=f"{name} ({len(processes)})",
                 values=(user, f"{n_threads}", f"{memory_usage:.2f} MB")
             )
 
             for process in processes:
                 self.global_tree.insert(
-                    parent,
+                    parent_global,
                     "end",
                     text=f"PID: {process['pid']}",
                     values=(
@@ -193,19 +182,37 @@ class View:
                     ),
                 )
 
-                self.details_tree.insert(
-                    "",
-                    "end",
-                    text=process['name'],
-                    values=(
-                        process['pid'],
-                        process['priority'],
-                        process['user'],
-                        f"{process['cpu_usage']}%",
-                        f"{process['kernel_time']} s ({process['kernel_percent']}%)",
-                        f"{process['user_time']} s ({process['user_percent']}%)",
+                parent_details = self.details_tree.insert(
+                                    "",
+                                    "end",
+                                    text=process['name'],
+                                    values=(
+                                        process['pid'],
+                                        process['priority'],
+                                        process['user'],
+                                        f"{process['cpu_usage']}%",
+                                        f"{process['kernel_time']} s ({process['kernel_percent']}%)",
+                                        f"{process['user_time']} s ({process['user_percent']}%)",
+                                    )
+                                )
+
+                for thread in process['threads']:
+                    self.details_tree.insert(
+                        parent_details,
+                        "end",
+                        text=process['name'],
+                        values=(
+                            process['pid'],
+                            "",
+                            "",
+                            f"{thread['cpu_usage']}%",
+                            f"{thread['kernel_time']} s ({thread['kernel_percent']}%)",
+                            f"{thread['user_time']} s ({thread['user_percent']}%)",
+                            thread['thread_id'],
+                            thread['base_priority'],
+                            thread['delta_priority']
+                        ),
                     )
-                )
 
                 self.memory_tree.insert(
                     "",
