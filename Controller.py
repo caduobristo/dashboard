@@ -1,6 +1,3 @@
-import time
-import threading
-
 class Controller:
     def __init__(self, model, view):
         self.model = model

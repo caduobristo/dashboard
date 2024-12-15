@@ -95,11 +95,22 @@ def GetProcessMemoryInfos(handle):
     # Tamanho da estrutura
     mem_infos.cb = ctypes.sizeof(MEMORY_INFOS)
 
+    # Retorno em bytes, 1024 ** 2 é a quantidade de bytes em um MB
+    def convert_to_MB(size):
+        return round(size/(1024 ** 2), 2)
+
     if GetProcessMemoryInfo(handle, ctypes.byref(mem_infos), mem_infos.cb):
-        # Retorno em bytes, 1024 ** 2 é a quantidade de bytes em um MB
-        return round(mem_infos.PeakWorkingSetSize / (1024 ** 2), 2), round(mem_infos.WorkingSetSize / (1024 ** 2), 2)
+        peak = convert_to_MB(mem_infos.PeakWorkingSetSize)
+        current = convert_to_MB(mem_infos.WorkingSetSize)
+        nonPaged = convert_to_MB(mem_infos.QuotaNonPagedPoolUsage)
+        paged = convert_to_MB(mem_infos.PagefileUsage)
+        maxPaged = convert_to_MB(mem_infos.PeakPagefileUsage)
+
+        return {"peak": peak, "current": current, "nonPaged": nonPaged,
+                "paged": paged, "maxPaged": maxPaged}        
     else:
-        return (-1, -1)
+        return {"peak": 'N/A', "current": 'N/A', "nonPaged": 'N/A',
+                "paged": 'N/A', "maxPaged": 'N/A'} 
 
 # Abre o token do processo
 OpenProcessToken = advapi32.OpenProcessToken
@@ -314,8 +325,11 @@ def list_processes():
                         "kernel_percent": times['kernel_percent'],
                         "user_time": times['user'],
                         "user_percent": times['user_percent'],
-                        "peak_memory": memory[0],
-                        "current_memory": memory[1],
+                        "peak_memory": memory['peak'],
+                        "current_memory": memory['current'],
+                        "nonPaged_memory": memory['nonPaged'],
+                        "paged_memory": memory['paged'],
+                        "maxPaged_memory": memory['maxPaged'],
                         "user": GetProcessUser(handle),
                         "priority": GetProcessPriority(handle),
                         "threads": threads.get(pid, [])

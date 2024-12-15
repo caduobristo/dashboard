@@ -44,21 +44,16 @@ class View:
         self.global_tree.column("#0", width=200, anchor=tk.W)
         self.global_tree.heading("#0", text="Nome / PID", anchor=tk.W)
 
-        self.global_tree.column("Usuário", width=200, anchor=tk.W)
-        self.global_tree.heading("Usuário", text="Usuário")
-
-        self.global_tree.column("Número de threads", width=200, anchor=tk.W)
-        self.global_tree.heading("Número de threads", text="Número de threads")
-
-        self.global_tree.column("Uso de Memória", width=200, anchor=tk.W)
-        self.global_tree.heading("Uso de Memória", text="Uso de Memória")
+        for col in self.global_tree["columns"]:
+            self.global_tree.column(col, width=150, anchor=tk.W)
+            self.global_tree.heading(col, text=col, anchor=tk.W)
 
         self.global_tree.pack(expand=True, fill=tk.BOTH)
 
         scroll.config(command=self.global_tree.yview)
 
     def create_details_screen(self):
-        self.details_info = tk.Label(self.details_frame, text="Informações detalhadas de cada processo")
+        self.details_info = tk.Label(self.details_frame, text="Carregando informações...")
         self.details_info.pack(pady=20)
 
         tree_frame = tk.Frame(self.details_frame)
@@ -72,8 +67,8 @@ class View:
             yscrollcommand=scroll.set,
         )
         self.details_tree["columns"] = (
-            "PID", "Prioridade", "Usuário", "Uso da CPU", 
-            "Tempo de kernel", "Tempo de usuário", "Thread ID",
+            "ID", "Prioridade", "Usuário", "Uso da CPU", 
+            "Tempo de kernel", "Tempo de usuário",
             "Prioridade base", "Prioridade Alterada")
 
         self.details_tree.column("#0", width=200, anchor=tk.W)
@@ -87,7 +82,7 @@ class View:
         scroll.config(command=self.details_tree.yview)
 
     def create_memory_screen(self):
-        self.memory_info = tk.Label(self.memory_frame, text="Informações detalhadas do uso de memória")
+        self.memory_info = tk.Label(self.memory_frame, text="Carregando informações...")
         self.memory_info.pack(pady=20)
 
         tree_frame = tk.Frame(self.memory_frame)
@@ -100,19 +95,17 @@ class View:
             tree_frame,
             yscrollcommand=scroll.set,
         )
-        self.memory_tree["columns"] = ("PID", "Uso de memória", "Pico de memória")
+        self.memory_tree["columns"] = (
+            "PID", "Uso de memória", "Pico de memória",
+            "Memória não paginada", "Memória paginada",
+            "Máximo de memória paginada")
 
         self.memory_tree.column("#0", anchor=tk.W)
         self.memory_tree.heading("#0", text="Processo", anchor=tk.W)
 
-        self.memory_tree.column("PID", anchor=tk.W)
-        self.memory_tree.heading("PID", text="PID", anchor=tk.W)
-
-        self.memory_tree.column("Uso de memória", anchor=tk.W)
-        self.memory_tree.heading("Uso de memória", text="Uso de memória", anchor=tk.W)
-
-        self.memory_tree.column("Pico de memória", anchor=tk.W)
-        self.memory_tree.heading("Pico de memória", text="Pico de memória", anchor=tk.W)
+        for col in self.memory_tree["columns"]:
+            self.memory_tree.column(col, width=150, anchor=tk.W)
+            self.memory_tree.heading(col, text=col, anchor=tk.W)
 
         self.memory_tree.pack(expand=True, fill=tk.BOTH)
         scroll.config(command=self.memory_tree.yview)
@@ -137,14 +130,29 @@ class View:
         if global_data:
             self.global_info.config(
                 text=(
-                    f"CPU - Uso total: {global_data['cpu_usage']}% | Ocioso: {global_data['idle']}% | "
-                    f"Kernel: {global_data['kernel']}% | Usuário: {global_data['user']}% | "
-                    f"Número de processadores: {global_data['n_processors']} | "
-                    f"Tamanho da página de memória: {global_data['page_size']} \n\n"
-                    f"Memória: {global_data['memory_used']}GB/{global_data['memory_total']}GB "
-                    f"({global_data['memory_percent']}%) | "
+                    "INFORMAÇÕES GERAIS DOS PROCESSOS\n\n"
+                    f"Uso de CPU: {global_data['cpu_usage']}% | "
+                    f"Memória: {global_data['memory_used_phys']}GB/{global_data['memory_total_phys']}GB "
+                    f"({global_data['memory_percent_phys']}%) | "
                     f"Disco: {global_data['disk_used']}GB/{global_data['disk_total']}GB "
                     f"({global_data['disk_percent']}%)"
+                )
+            )
+            self.details_info.config(
+                text=(
+                    "INFORMAÇÕES DETALHADAS DOS PROCESSOS\n\n"
+                    f"Uso de CPU: {global_data['cpu_usage']}% | Tempo ocioso: {global_data['idle']}% | "
+                    f"Tempo de kernel: {global_data['kernel']}% | Tempo de usuário: {global_data['user']}% | "
+                    f"Número de processadores: {global_data['n_processors']}"
+                )
+            )
+            self.memory_info.config(
+                text=(
+                    "INFORMAÇÕES DETALHADAS DE MEMÓRIA DOS PROCESSOS \n \n"
+                    f"Memória física: {global_data['memory_used_phys']}GB/{global_data['memory_total_phys']}GB "
+                    f"({global_data['memory_percent_phys']}%)\n\n"
+                    f"Memória virtual: {global_data['memory_used_virt']}GB/{global_data['memory_total_virt']}GB "
+                    f"({global_data['memory_used_virt']/global_data['memory_total_virt']*100}%)"
                 )
             )
 
@@ -200,28 +208,31 @@ class View:
                     self.details_tree.insert(
                         parent_details,
                         "end",
-                        text=process['name'],
+                        text="",
                         values=(
-                            process['pid'],
+                            thread['thread_id'],
                             "",
                             "",
                             f"{thread['cpu_usage']}%",
                             f"{thread['kernel_time']} s ({thread['kernel_percent']}%)",
                             f"{thread['user_time']} s ({thread['user_percent']}%)",
-                            thread['thread_id'],
                             thread['base_priority'],
                             thread['delta_priority']
                         ),
                     )
 
+                percent_memory = round(process['current_memory']/(global_data['memory_total_phys']*1000)*100,2)
                 self.memory_tree.insert(
                     "",
                     "end",
                     text=process['name'],
                     values=(
                         process['pid'],
-                        f"{process['current_memory']} MB",
-                        f"{process['peak_memory']} MB"
+                        f"{process['current_memory']} MB ({percent_memory}%)",
+                        f"{process['peak_memory']} MB",
+                        f"{process['nonPaged_memory']} MB",
+                        f"{process['paged_memory']} MB",
+                        f"{process['maxPaged_memory']} MB",
                     )
                 )
 

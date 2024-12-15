@@ -96,30 +96,38 @@ def get_cpu_infos():
     kernel32.GetSystemInfo(ctypes.byref(system_info))
 
     n_processors = system_info.dwNumberOfProcessors
-    page_size = system_info.dwPageSize 
 
     return {
         "idle": percent_idle,                           
         "kernel": percent_kernel,                   
         "user": percent_user,                          
         "cpu_usage": cpu_usage,                           
-        "n_processors": n_processors,
-        "page_size": page_size,                   
+        "n_processors": n_processors,                  
     }
 
 # Obtém informações de memória usando GlobalMemoryStatusEx
 def get_memory_info():
     memory_status = MEMORYSTATUSEX()
     memory_status.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
-    kernel32.GlobalMemoryStatusEx(ctypes.byref(memory_status))
+
+    if not kernel32.GlobalMemoryStatusEx(ctypes.byref(memory_status)):
+        return {
+            "total_phys": 'N/A', "available_phys": 'N/A', "used_phys": 'N/A',
+            "percent_phys": 'N/A', "total_virt": 'N/A', "available_virt": 'N/A',
+            "used_virt": 'N/A',
+        }
+
+    def convert_to_GB(mem):
+        return round(mem / (1024**3), 2)
 
     return {
-        "total": round(memory_status.ullTotalPhys / (1024**3), 2),  # Em GB
-        "available": round(memory_status.ullAvailPhys / (1024**3), 2),
-        "used": round(
-            (memory_status.ullTotalPhys - memory_status.ullAvailPhys) / (1024**3), 2
-        ),
-        "percent": memory_status.dwMemoryLoad,
+        "total_phys": convert_to_GB(memory_status.ullTotalPhys),
+        "available_phys": convert_to_GB(memory_status.ullAvailPhys),
+        "used_phys": convert_to_GB(memory_status.ullTotalPhys - memory_status.ullAvailPhys),
+        "percent_phys": round(memory_status.dwMemoryLoad, 2),
+        "total_virt": convert_to_GB(memory_status.ullTotalPageFile),
+        "available_virt": convert_to_GB(memory_status.ullAvailPageFile),
+        "used_virt": convert_to_GB(memory_status.ullTotalPageFile - memory_status.ullAvailPageFile),
     }
 
 # Obtém informações de disco usando GetDiskFreeSpaceEx
@@ -142,4 +150,25 @@ def get_disk_info():
         "percent": round(
             (total_bytes.value - free_bytes.value) / total_bytes.value * 100, 2
         ),
+    }
+
+def list_global_infos():
+    cpu_infos = get_cpu_infos()
+    memory_infos = get_memory_info()
+    disk_infos = get_disk_info()
+
+    return {
+        "cpu_usage": cpu_infos['cpu_usage'],
+        "idle": cpu_infos.get('idle', 'N/A'),
+        "kernel": cpu_infos.get('kernel', 'N/A'),
+        "user": cpu_infos.get('user', 'N/A'),
+        "n_processors": cpu_infos.get('n_processors', 'N/A'),
+        "memory_used_phys": memory_infos.get('used_phys', 'N/A'),
+        "memory_total_phys": memory_infos.get('total_phys', 'N/A'),
+        "memory_percent_phys": memory_infos.get('percent_phys', 'N/A'),
+        "memory_used_virt": memory_infos.get('used_virt', 'N/A'),
+        "memory_total_virt": memory_infos.get('total_virt', 'N/A'),
+        "disk_used": disk_infos.get('used', 'N/A'),
+        "disk_total": disk_infos.get('total', 'N/A'),
+        "disk_percent": disk_infos.get('percent', 'N/A')
     }
