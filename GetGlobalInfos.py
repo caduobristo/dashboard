@@ -1,7 +1,7 @@
 import os
 import ctypes
 
-# Bibliotecas do sistema para coletar informações do sistema
+# Biblioteca para coletar informações do sistema
 kernel32 = ctypes.WinDLL('kernel32.dll')
 
 # Estrutura de retorno da função de informações da CPU
@@ -35,17 +35,17 @@ class MEMORYSTATUSEX(ctypes.Structure):
         ("ullAvailExtendedVirtual", ctypes.c_ulonglong), # Memória estendida disponível (sempre 0 no Windows atual)
     ]
 
-previous_idle = 0
-previous_kernel = 0
-previous_user = 0
-previous_total = 0
-
 # Estrutura de retorno da função de uso da CPU
 class FILETIME(ctypes.Structure):
     _fields_ = [
         ("dwLowDateTime", ctypes.c_uint),
         ("dwHighDateTime", ctypes.c_uint),
     ]
+
+previous_idle = 0
+previous_kernel = 0
+previous_user = 0
+previous_total = 0
 
 # Obtém informações de CPU usando GetSystemTimes
 def get_cpu_infos():
@@ -58,17 +58,17 @@ def get_cpu_infos():
     kernel_time = FILETIME()
     user_time = FILETIME()
 
-    kernel32.GetSystemTimes(
-        ctypes.byref(idle_time), ctypes.byref(kernel_time), ctypes.byref(user_time)
-    )
+    kernel32.GetSystemTimes(ctypes.byref(idle_time), ctypes.byref(kernel_time), ctypes.byref(user_time))
 
     # Converte LIFETIME para inteiro (ms)
     def filetime_to_int(filetime):
+        # FILETIME separa o total em dois valores de 32 bits
         return ((filetime.dwHighDateTime << 32) | filetime.dwLowDateTime) / 10000
 
     idle = filetime_to_int(idle_time)
     kernel = filetime_to_int(kernel_time)
     user = filetime_to_int(user_time)
+    # Kernel, nesse caso, também tem o valor ocioso
     total = (kernel-idle) + user + idle
 
     # Calculo da porcentagem de uso de usuário, kernel e tempo ocioso da CPU
@@ -120,14 +120,18 @@ def get_memory_info():
     def convert_to_GB(mem):
         return round(mem / (1024**3), 2)
 
+    used_phys = convert_to_GB(memory_status.ullTotalPhys - memory_status.ullAvailPhys)
+    total_virt = convert_to_GB(memory_status.ullTotalPageFile)
+    used_virt = convert_to_GB(memory_status.ullTotalPageFile - memory_status.ullAvailPageFile)
     return {
         "total_phys": convert_to_GB(memory_status.ullTotalPhys),
         "available_phys": convert_to_GB(memory_status.ullAvailPhys),
-        "used_phys": convert_to_GB(memory_status.ullTotalPhys - memory_status.ullAvailPhys),
+        "used_phys": used_phys,
         "percent_phys": round(memory_status.dwMemoryLoad, 2),
-        "total_virt": convert_to_GB(memory_status.ullTotalPageFile),
+        "total_virt": total_virt,
         "available_virt": convert_to_GB(memory_status.ullAvailPageFile),
-        "used_virt": convert_to_GB(memory_status.ullTotalPageFile - memory_status.ullAvailPageFile),
+        "used_virt": used_virt,
+        "percent_virt": round(used_virt/total_virt*100, 2)
     }
 
 # Obtém informações de disco usando GetDiskFreeSpaceEx
@@ -159,15 +163,16 @@ def list_global_infos():
 
     return {
         "cpu_usage": cpu_infos['cpu_usage'],
-        "idle": cpu_infos.get('idle', 'N/A'),
-        "kernel": cpu_infos.get('kernel', 'N/A'),
-        "user": cpu_infos.get('user', 'N/A'),
-        "n_processors": cpu_infos.get('n_processors', 'N/A'),
-        "memory_used_phys": memory_infos.get('used_phys', 'N/A'),
-        "memory_total_phys": memory_infos.get('total_phys', 'N/A'),
-        "memory_percent_phys": memory_infos.get('percent_phys', 'N/A'),
-        "memory_used_virt": memory_infos.get('used_virt', 'N/A'),
-        "memory_total_virt": memory_infos.get('total_virt', 'N/A'),
+        "idle": cpu_infos['idle'],
+        "kernel": cpu_infos['kernel'],
+        "user": cpu_infos['user'],
+        "n_processors": cpu_infos['n_processors'],
+        "memory_used_phys": memory_infos['used_phys'],
+        "memory_total_phys": memory_infos['total_phys'],
+        "memory_percent_phys": memory_infos['percent_phys'],
+        "memory_used_virt": memory_infos['used_virt'],
+        "memory_total_virt": memory_infos['total_virt'],
+        "memory_percent_virt": memory_infos['percent_virt'],
         "disk_used": disk_infos.get('used', 'N/A'),
         "disk_total": disk_infos.get('total', 'N/A'),
         "disk_percent": disk_infos.get('percent', 'N/A')

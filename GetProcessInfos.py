@@ -17,15 +17,15 @@ advapi32 = ctypes.WinDLL('Advapi32.dll')
 # Estrutura retornada pela função de informações de memória
 class MEMORY_INFOS(ctypes.Structure):
     _fields_ = [
-        ("cb", wintypes.DWORD),                       # Tamanho da estrutura (em bytes)
-        ("PeakWorkingSetSize", ctypes.c_size_t),      # Máximo de memória física usada
-        ("WorkingSetSize", ctypes.c_size_t),          # Memória física usada atualmente
-        ("QuotaPeakPagedPoolUsage", ctypes.c_size_t), # Máximo de memória do pool paginado usada
-        ("QuotaPagedPoolUsage", ctypes.c_size_t),     # Memória atual do pool paginado usada
+        ("cb", wintypes.DWORD),                          # Tamanho da estrutura (em bytes)
+        ("PeakWorkingSetSize", ctypes.c_size_t),         # Máximo de memória física usada
+        ("WorkingSetSize", ctypes.c_size_t),             # Memória física usada atualmente
+        ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),    # Máximo de memória do pool paginado usada
+        ("QuotaPagedPoolUsage", ctypes.c_size_t),        # Memória atual do pool paginado usada
         ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t), # Máximo de memória do pool não paginado usada
-        ("QuotaNonPagedPoolUsage", ctypes.c_size_t),  # Memória atual do pool não paginado usada
-        ("PagefileUsage", ctypes.c_size_t),           # Tamanho do arquivo de paginação usado atualmente
-        ("PeakPagefileUsage", ctypes.c_size_t),       # Máximo de uso do arquivo de paginação
+        ("QuotaNonPagedPoolUsage", ctypes.c_size_t),     # Memória atual do pool não paginado usada
+        ("PagefileUsage", ctypes.c_size_t),              # Tamanho do arquivo de paginação usado atualmente
+        ("PeakPagefileUsage", ctypes.c_size_t),          # Máximo de uso do arquivo de paginação
     ]
     
 # Estruturas retornadas pelas funções de informações de usuários
@@ -43,13 +43,13 @@ class TOKEN_USER(ctypes.Structure):
 # Estrutura retornada pela função de informações de threads
 class THREAD_INFOS(ctypes.Structure):
     _fields_ = [
-        ("dwSize", wintypes.DWORD),        # Tamanho da estrutura
-        ("cntUsage", wintypes.DWORD),      # Contagem de uso
-        ("th32ThreadID", wintypes.DWORD),  # ID do thread
+        ("dwSize", wintypes.DWORD),              # Tamanho da estrutura
+        ("cntUsage", wintypes.DWORD),            # Contagem de uso
+        ("th32ThreadID", wintypes.DWORD),        # ID do thread
         ("th32OwnerProcessID", wintypes.DWORD),  # ID do processo ao qual o thread pertence
-        ("tpBasePri", wintypes.LONG),      # Prioridade base do thread
-        ("tpDeltaPri", wintypes.LONG),     # Alteração na prioridade
-        ("dwFlags", wintypes.DWORD),       # Reservado, não usado
+        ("tpBasePri", wintypes.LONG),            # Prioridade base do thread
+        ("tpDeltaPri", wintypes.LONG),           # Alteração na prioridade
+        ("dwFlags", wintypes.DWORD),             # Reservado, não usado
     ]
 
 # Estrutura de retorno do tempo dos threads
@@ -65,7 +65,7 @@ EnumProcesses.restype = wintypes.BOOL
 
 def GetProcessIDs():
     arr = (ctypes.c_ulong * 1024)() # Array de retorno da função
-    count = ctypes.c_ulong() # Número total de bytes no array 
+    count = ctypes.c_ulong()        # Número total de bytes no array 
 
     if not EnumProcesses(ctypes.byref(arr), ctypes.sizeof(arr), ctypes.byref(count)):
         raise ctypes.WinError()
@@ -140,6 +140,7 @@ def GetProcessUser(handle):
         GetTokenInformation(token_handle, 1, None, 0, ctypes.byref(token_user_size))
         buffer = ctypes.create_string_buffer(token_user_size.value)
 
+        # Obtém as informações do token
         if not GetTokenInformation(token_handle, 1, buffer, token_user_size, ctypes.byref(token_user_size)):
             return "N/A"
 
@@ -154,6 +155,7 @@ def GetProcessUser(handle):
         domain_size = wintypes.DWORD(256)
         sid_name_use = wintypes.DWORD()
 
+        # Converte os dados em string
         if not LookupAccountSid(None, sid, name, ctypes.byref(name_size), domain, ctypes.byref(domain_size), ctypes.byref(sid_name_use)):
             return "N/A"
 
@@ -174,9 +176,14 @@ def GetProcessCPUUsage(handle):
                        ctypes.byref(kernel), ctypes.byref(user)):
         # Converte FILETIME para inteiro (segundo)
         def filetime_to_int(filetime):
-            return ((filetime.dwHighDateTime << 32) | filetime.dwLowDateTime) / 10000000
-        
-        current = time.time() + 11644473600
+            # FILETIME separa o total em dois valores de 32 bits
+            return ((filetime.dwHighDateTime << 32) | filetime.dwLowDateTime) / 10_000_000
+        '''
+        Como a função Time() retorna o valor baseado na data 1º de janeiro de 1970 e
+        o valor de criação é baseado na data 1º de janeiro de 1601 é necessário somar 
+        11644473600 segundos para alinhar com o valor de creation
+        '''
+        current = time.time() + 11_644_473_600
     
         total = current - filetime_to_int(creation)
         kernel = filetime_to_int(kernel)
@@ -198,12 +205,20 @@ GetPriorityClass.restype = wintypes.DWORD
 
 def GetProcessPriority(handle):
     priority = GetPriorityClass(handle)
-    if priority == 0:
-        return "N/A"
-    elif priority == 32:
+    if priority == 32:
         return "Baixa"
-    else:
+    elif priority == 64:
+        return "Ocioso"
+    elif priority == 32768:
+        return "Acima do Normal"
+    elif priority == 128:
         return "Alta"
+    elif priority == 256:
+        return "Tempo Real"
+    elif priority == 16384:
+        return "Abaixo do Normal"
+    else:
+        return "N/A"
 
 # Função que retorna os tempos do thread
 GetThreadTimes = kernel32.GetThreadTimes
@@ -223,11 +238,16 @@ def GetThreadsTimes(thread_id):
                     "user": 'N/A', "user_percent": 'N/A'}
         
         def filetime_to_int(filetime):
-            return ((filetime.dwHighDateTime << 32) | filetime.dwLowDateTime) / 10000000
+            # FILETIME separa o total em dois valores de 32 bits
+            return ((filetime.dwHighDateTime << 32) | filetime.dwLowDateTime) / 10_000_000
 
         if GetThreadTimes(handle, ctypes.byref(creation), ctypes.byref(exit), 
                         ctypes.byref(kernel), ctypes.byref(user)):
-            
+            '''
+            Como a função Time() retorna o valor baseado na data 1º de janeiro de 1970 e
+            o valor de criação é baseado na data 1º de janeiro de 1601 é necessário somar 
+            11644473600 segundos para alinhar com o valor de creation
+            '''
             current = time.time() + 11644473600
 
             total = current - filetime_to_int(creation)
@@ -274,9 +294,18 @@ def GetThreads():
         # Obtém o primeiro thread do snapshot
         has_thread = Thread32First(snapshot, ctypes.byref(thread))
         if not has_thread:
-            return {} 
-        
-        # Enquanto a função retornar true
+            threads = {
+                "thread_id": 'N/A', 
+                "base_priority": 'N/A',
+                "delta_priority": 'N/A', 
+                "cpu_usage": 'N/A',
+                "kernel_time": 'N/A',     
+                "kernel_percent": 'N/A',
+                "user_time": 'N/A',          
+                "user_percent": 'N/A'
+            }
+
+        # Enquanto ainda houver threads
         while has_thread:
             pid = thread.th32OwnerProcessID
 
