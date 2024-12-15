@@ -97,7 +97,7 @@ def GetProcessMemoryInfos(handle):
 
     if GetProcessMemoryInfo(handle, ctypes.byref(mem_infos), mem_infos.cb):
         # Retorno em bytes, 1024 ** 2 é a quantidade de bytes em um MB
-        return mem_infos.PeakWorkingSetSize / (1024 ** 2), mem_infos.WorkingSetSize / (1024 ** 2)
+        return round(mem_infos.PeakWorkingSetSize / (1024 ** 2), 2), round(mem_infos.WorkingSetSize / (1024 ** 2), 2)
     else:
         return (-1, -1)
 
@@ -153,10 +153,7 @@ def GetProcessUser(handle):
 GetProcessTimes = kernel32.GetProcessTimes
 GetProcessTimes.restype = wintypes.BOOL
 
-previously = {"kernel": 0, "user": 0}
-
 def GetProcessCPUUsage(handle):
-    global previously
     creation = FILETIME()
     exit = FILETIME()
     kernel = FILETIME()
@@ -164,18 +161,26 @@ def GetProcessCPUUsage(handle):
 
     if GetProcessTimes(handle, ctypes.byref(creation), ctypes.byref(exit), 
                        ctypes.byref(kernel), ctypes.byref(user)):
-        # Converte FILETIME para inteiro (segundos)
+        # Converte FILETIME para inteiro (segundo)
         def filetime_to_int(filetime):
             return ((filetime.dwHighDateTime << 32) | filetime.dwLowDateTime) / 10000000
         
-        creation = filetime_to_int(creation)
-        exit = filetime_to_int(exit)
+        current = time.time() + 11644473600
+    
+        total = current - filetime_to_int(creation)
         kernel = filetime_to_int(kernel)
+        kernel_percent = round(kernel/total * 100, 2)
         user = filetime_to_int(user)
+        user_percent = round(user/total * 100, 2)
+        cpu_usage = round((kernel+user)/total * 100, 2)
 
-        return {"creation": creation, "exit": exit, "kernel": kernel, "user": user}
+        return {"cpu_usage": cpu_usage, 
+                "kernel": kernel, "kernel_percent": kernel_percent, 
+                "user": user, "user_percent": user_percent}
         
-    return {"creation": 'N/A', "exit": 'N/A', "kernel": 'N/A', "user": 'N/A'}
+    return {"cpu_usage": 'N/A', 
+            "kernel": 'N/A', "kernel_percent": 'N/A',
+            "user": 'N/A', "user_percent": 'N/A'}
 
 GetPriorityClass = kernel32.GetPriorityClass
 GetPriorityClass.restype = wintypes.DWORD
@@ -194,26 +199,41 @@ GetThreadTimes = kernel32.GetThreadTimes
 GetThreadTimes.restype = wintypes.BOOL
 
 def GetThreadsTimes(thread_id):
-    handle = kernel32.OpenThread(THREAD_QUERY_INFORMATION, False, thread_id)
-    if not handle:
-        return {"kernel": 0, "user":0}
-    
-    def filetime_to_ms(filetime):
-        return ((filetime.dwHighDateTime << 32) | filetime.dwLowDateTime) / 10000
+    creation = FILETIME()
+    exit = FILETIME()
+    kernel = FILETIME()
+    user = FILETIME()
     
     try:
-        creation = FILETIME()
-        exit = FILETIME()
-        kernel = FILETIME()
-        user = FILETIME()
+        handle = kernel32.OpenThread(THREAD_QUERY_INFORMATION, False, thread_id)
+        if not handle:
+            return {"cpu_usage": 'N/A', 
+                    "kernel": 'N/A', "kernel_percent": 'N/A',
+                    "user": 'N/A', "user_percent": 'N/A'}
+        
+        def filetime_to_int(filetime):
+            return ((filetime.dwHighDateTime << 32) | filetime.dwLowDateTime) / 10000000
 
         if GetThreadTimes(handle, ctypes.byref(creation), ctypes.byref(exit), 
-                          ctypes.byref(kernel), ctypes.byref(user)):
-            return {
-                "kernel": filetime_to_ms(kernel),
-                "user": filetime_to_ms(user)
-            }
-        return {"kernel": 0, "user":0}
+                        ctypes.byref(kernel), ctypes.byref(user)):
+            
+            current = time.time() + 11644473600
+
+            total = current - filetime_to_int(creation)
+            exit = filetime_to_int(exit)
+            kernel = filetime_to_int(kernel)
+            kernel_percent = round(kernel/total * 100, 2)
+            user = filetime_to_int(user)
+            user_percent = round(user/total * 100, 2)
+            cpu_usage = round((kernel+user)/total * 100, 2)
+
+            return {"cpu_usage": cpu_usage, 
+                "kernel": kernel, "kernel_percent": kernel_percent, 
+                "user": user, "user_percent": user_percent}
+        
+        return {"cpu_usage": 'N/A', 
+                "kernel": 'N/A', "kernel_percent": 'N/A',
+                "user": 'N/A', "user_percent": 'N/A'}
     finally:
         CloseHandle(handle)
 
@@ -253,11 +273,14 @@ def GetThreads():
 
             # Conjunto com as informações dos threads
             thread_info = {
-                "thread_id": thread.th32ThreadID,    # ID do thread
-                "base_priority": thread.tpBasePri,   # Prioridade base
-                "delta_priority": thread.tpDeltaPri, # Alteração na prioridade
-                "kernel_time": times['kernel'],      # Tempo de kernel 
-                "user_time": times['user']           # Tempo de usuário
+                "thread_id": thread.th32ThreadID, 
+                "base_priority": thread.tpBasePri,
+                "delta_priority": thread.tpDeltaPri, 
+                "cpu_usage": times['cpu_usage'],
+                "kernel_time": times['kernel'],     
+                "kernel_percent": times['kernel_percent'],
+                "user_time": times['user'],          
+                "user_percent": times['user_percent']
             }
 
             # Adiciona o thread na biblioteca, organizando pelo pid do processo
@@ -286,10 +309,11 @@ def list_processes():
                 times = GetProcessCPUUsage(handle)
                 processes[pid] = {
                         "name": GetProcessName(handle),
-                        "creation_time": times['creation'],
-                        "exit_time": times['exit'],
+                        "cpu_usage": times['cpu_usage'],
                         "kernel_time": times['kernel'],
+                        "kernel_percent": times['kernel_percent'],
                         "user_time": times['user'],
+                        "user_percent": times['user_percent'],
                         "peak_memory": memory[0],
                         "current_memory": memory[1],
                         "user": GetProcessUser(handle),

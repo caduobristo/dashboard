@@ -10,14 +10,17 @@ class View:
         self.menu = tk.Menu(self.root)
         self.root.config(menu=self.menu)
 
-        self.menu.add_command(label="Tela Principal", command=self.show_main_screen)
-        self.menu.add_command(label="Dados Detalhados", command=self.show_details_screen)
+        self.menu.add_command(label="Tela principal", command=self.show_main_screen)
+        self.menu.add_command(label="Dados detalhados", command=self.show_details_screen)
+        self.menu.add_command(label="Dados de memória", command=self.show_memory_screen)
 
         self.main_frame = tk.Frame(self.root)
         self.details_frame = tk.Frame(self.root)
+        self.memory_frame = tk.Frame(self.root)
 
         self.create_main_screen()
         self.create_details_screen()
+        self.create_memory_screen()
 
         self.show_main_screen()
 
@@ -68,8 +71,7 @@ class View:
             tree_frame,
             yscrollcommand=scroll.set,
         )
-        self.details_tree["columns"] = ("PID", "Prioridade", "Usuário", "Tempo de kernel", "Tempo de usuário", "Status")
-
+        self.details_tree["columns"] = ("PID", "Prioridade", "Usuário", "Uso da CPU", "Tempo de kernel", "Tempo de usuário")
 
         self.details_tree.column("#0", width=200, anchor=tk.W)
         self.details_tree.heading("#0", text="Processo", anchor=tk.W)
@@ -83,25 +85,63 @@ class View:
         self.details_tree.column("Usuário", width=200, anchor=tk.W)
         self.details_tree.heading("Usuário", text="Usuário", anchor=tk.W)
 
+        self.details_tree.column("Uso da CPU", width=200, anchor=tk.W)
+        self.details_tree.heading("Uso da CPU", text="Uso da CPU", anchor=tk.W)
+
         self.details_tree.column("Tempo de kernel", width=200, anchor=tk.W)
         self.details_tree.heading("Tempo de kernel", text="Tempo de kernel", anchor=tk.W)
 
         self.details_tree.column("Tempo de usuário", width=200, anchor=tk.W)
         self.details_tree.heading("Tempo de usuário", text="Tempo de usuário", anchor=tk.W)
 
-        self.details_tree.column("Status", width=200, anchor=tk.W)
-        self.details_tree.heading("Status", text="Status", anchor=tk.W)
-
         self.details_tree.pack(expand=True, fill=tk.BOTH)
         scroll.config(command=self.details_tree.yview)
 
+    def create_memory_screen(self):
+        self.memory_info = tk.Label(self.memory_frame, text="Informações detalhadas do uso de memória")
+        self.memory_info.pack(pady=20)
+
+        tree_frame = tk.Frame(self.memory_frame)
+        tree_frame.pack(expand=True, fill=tk.BOTH)
+
+        scroll = ttk.Scrollbar(tree_frame, orient="vertical")
+        scroll.pack(side=tk.RIGHT, fill=tk.Y)
+
+        self.memory_tree = ttk.Treeview(
+            tree_frame,
+            yscrollcommand=scroll.set,
+        )
+        self.memory_tree["columns"] = ("PID", "Uso de memória", "Pico de memória")
+
+        self.memory_tree.column("#0", anchor=tk.W)
+        self.memory_tree.heading("#0", text="Processo", anchor=tk.W)
+
+        self.memory_tree.column("PID", anchor=tk.W)
+        self.memory_tree.heading("PID", text="PID", anchor=tk.W)
+
+        self.memory_tree.column("Uso de memória", anchor=tk.W)
+        self.memory_tree.heading("Uso de memória", text="Uso de memória", anchor=tk.W)
+
+        self.memory_tree.column("Pico de memória", anchor=tk.W)
+        self.memory_tree.heading("Pico de memória", text="Pico de memória", anchor=tk.W)
+
+        self.memory_tree.pack(expand=True, fill=tk.BOTH)
+        scroll.config(command=self.memory_tree.yview)
+
     def show_main_screen(self):
         self.details_frame.pack_forget()
+        self.memory_frame.pack_forget()
         self.main_frame.pack(expand=True, fill=tk.BOTH)
 
     def show_details_screen(self):
         self.main_frame.pack_forget()
+        self.memory_frame.pack_forget()
         self.details_frame.pack(expand=True, fill=tk.BOTH)
+
+    def show_memory_screen(self):
+        self.main_frame.pack_forget()
+        self.details_frame.pack_forget()
+        self.memory_frame.pack(expand=True, fill=tk.BOTH)
     
     def display(self, processes, global_data):
         # Exibir informações globais
@@ -125,6 +165,9 @@ class View:
 
         for item in self.details_tree.get_children():
                 self.details_tree.delete(item)
+
+        for item in self.memory_tree.get_children():
+                self.memory_tree.delete(item)
 
         grouped = group_processes(processes)
 
@@ -150,7 +193,6 @@ class View:
                     ),
                 )
 
-                status = 'Em execução' if process['exit_time'] == 0 else 'Suspenso'
                 self.details_tree.insert(
                     "",
                     "end",
@@ -159,9 +201,20 @@ class View:
                         process['pid'],
                         process['priority'],
                         process['user'],
-                        f"{process['kernel_time']} s",
-                        f"{process['user_time']} s",
-                        status,
+                        f"{process['cpu_usage']}%",
+                        f"{process['kernel_time']} s ({process['kernel_percent']}%)",
+                        f"{process['user_time']} s ({process['user_percent']}%)",
+                    )
+                )
+
+                self.memory_tree.insert(
+                    "",
+                    "end",
+                    text=process['name'],
+                    values=(
+                        process['pid'],
+                        f"{process['current_memory']} MB",
+                        f"{process['peak_memory']} MB"
                     )
                 )
 
