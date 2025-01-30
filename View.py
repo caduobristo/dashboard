@@ -1,10 +1,15 @@
 import tkinter as tk
 from tkinter import ttk
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import math
 
 class View:
-    def __init__(self, root):
+    def __init__(self, root, controller):
         self.root = root
+        self.controller = controller
         self.root.title("Dashboard de recursos do sistema")
+        self.root.protocol("WM_DELETE_WINDOW", self.CloseApp)
         self.root.state("zoomed")
 
         self.menu = tk.Menu(self.root)
@@ -28,29 +33,46 @@ class View:
         self.global_info = tk.Label(self.main_frame, text="Carregando informações...")
         self.global_info.pack(pady=20)
 
-        tree_frame = tk.Frame(self.main_frame)
-        tree_frame.pack(expand=True, fill=tk.BOTH)
+        self.graph_frame = tk.Frame(self.main_frame)
+        self.graph_frame.pack(expand=True, fill=tk.BOTH)
 
-        scroll = ttk.Scrollbar(tree_frame, orient="vertical")
-        scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        # Criar figuras para os gráficos
+        self.fig_cpu, self.ax_cpu = plt.subplots(figsize=(4, 4))
+        self.fig_mem, self.ax_mem = plt.subplots(figsize=(4, 4))
 
-        self.global_tree = ttk.Treeview(
-            tree_frame,
-            yscrollcommand=scroll.set
-        )
-        self.global_tree["columns"] = ("Usuário", "Número de threads", "Uso de Memória")
+        # Criar canvases do Tkinter para exibir os gráficos
+        self.canvas_cpu = FigureCanvasTkAgg(self.fig_cpu, master=self.graph_frame)
+        self.canvas_cpu.get_tk_widget().pack(side=tk.LEFT, expand=True, fill=tk.BOTH)
 
-        # Configuração das colunas
-        self.global_tree.column("#0", width=200, anchor=tk.W)
-        self.global_tree.heading("#0", text="Nome / PID", anchor=tk.W)
+        self.canvas_mem = FigureCanvasTkAgg(self.fig_mem, master=self.graph_frame)
+        self.canvas_mem.get_tk_widget().pack(side=tk.RIGHT, expand=True, fill=tk.BOTH)
 
-        for col in self.global_tree["columns"]:
-            self.global_tree.column(col, width=150, anchor=tk.W)
-            self.global_tree.heading(col, text=col, anchor=tk.W)
+    def UpdateGraphs(self, cpu_usage, mem_usage):
+        """ Atualiza os gráficos de CPU e Memória """
+        if not self.root.winfo_exists():  # Se a janela foi fechada, não faz nada
+            return
+        
+        self.ax_cpu.clear()
+        self.ax_mem.clear()
+        print(f"CPU Usage Data: {cpu_usage}")
+        print(f"Memory Usage Data: {mem_usage}")
 
-        self.global_tree.pack(expand=True, fill=tk.BOTH)
+        # Gráfico de pizza para CPU
+        if sum(cpu_usage) != 0:
+            labels_cpu = ["Usuário", "Sistema", "Ocioso"]
+            colors_cpu = ["#ff9999", "#66b3ff", "#99ff99"]
+            self.ax_cpu.pie(cpu_usage, labels=labels_cpu, autopct='%1.1f%%', colors=colors_cpu, startangle=140)
+            self.ax_cpu.set_title("Uso da CPU (%)")
 
-        scroll.config(command=self.global_tree.yview)
+        # Gráfico de pizza para Memória
+        labels_mem = ["Usada", "Livre"]
+        colors_mem = ["#ffcc99", "#c2c2f0"]
+        self.ax_mem.pie(mem_usage, labels=labels_mem, autopct='%1.1f%%', colors=colors_mem, startangle=140)
+        self.ax_mem.set_title("Uso da Memória (%)")
+
+        # Atualizar os canvases
+        self.canvas_cpu.draw()
+        self.canvas_mem.draw()
 
     def CreateDetails(self):
         self.details_info = tk.Label(self.details_frame, text="Carregando informações...")
@@ -127,7 +149,24 @@ class View:
     
     def Display(self, processes, global_data):
         # Configura as informações globais de cada tela
+        def safe_float(value):
+            try:
+                val = float(value)
+                return val if not math.isnan(val) else 0
+            except (ValueError, TypeError):
+                return 0  # Se for 'N/A', retorna 0
         if global_data:
+            cpu_usage = [
+                safe_float(global_data.get('user', 0)),
+                safe_float(global_data.get('kernel', 0)),
+                safe_float(global_data.get('idle', 0))
+            ]
+            mem_usage = [
+                safe_float(global_data.get('memory_percent_phys', 0)),
+                100 - safe_float(global_data.get('memory_percent_phys', 0))
+            ]
+            self.UpdateGraphs(cpu_usage, mem_usage)
+
             self.global_info.config(
                 text=(
                     "INFORMAÇÕES GERAIS\n\n"
@@ -156,10 +195,6 @@ class View:
                 )
             )
 
-        # Limpas os dados anteriores
-        for item in self.global_tree.get_children():
-            self.global_tree.delete(item)
-
         for item in self.details_tree.get_children():
                 self.details_tree.delete(item)
 
@@ -174,24 +209,7 @@ class View:
             memory_usage = sum(p['current_memory'] for p in processes)
             n_threads = sum(len(p['threads']) for p in processes)
 
-            # Informações somadas do processo
-            parent_global = self.global_tree.insert(
-                "", "end", text=f"{name} ({len(processes)})",
-                values=(user, f"{n_threads}", f"{memory_usage:.2f} MB")
-            )
-
             for process in processes:
-                # Informações de todos os processos separadamente
-                self.global_tree.insert(
-                    parent_global,
-                    "end",
-                    text=f"PID: {process['pid']}",
-                    values=(
-                        f"{user}",
-                        f"{len(process['threads'])}",
-                        f"{process['current_memory']}",
-                    ),
-                )
 
                 # Informações detalhadas dos processos
                 parent_details = self.details_tree.insert(
@@ -243,6 +261,14 @@ class View:
                         f"{process['maxPaged_memory']} MB",
                     )
                 )
+    def CloseApp(self):
+        """ Cancela atualizações e fecha o app corretamente """
+        self.controller.stop()  # Interrompe a atualização no Controller
+        if hasattr(self, "update_task"):
+            self.root.after_cancel(self.update_task)  # Cancela atualizações pendentes
+        plt.close('all')  # Fecha os gráficos do matplotlib
+        self.root.quit()  # Encerra o loop principal do Tkinter
+        self.root.destroy()  # Fecha a janela
 
 # Função para agrupar processos
 def group_processes(processes):

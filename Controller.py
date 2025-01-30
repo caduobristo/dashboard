@@ -6,6 +6,8 @@ class Controller:
 
     def start(self):
         def update():
+            if not self.running:
+                return
             try:
                 if not self.model.data_queue.empty():
                     process_data, global_data = self.model.data_queue.get()
@@ -18,4 +20,7 @@ class Controller:
             self.view.root.after(5000, update)
 
         update()
+
+    def stop(self):
+        self.running = False
 

@@ -8,8 +8,9 @@ if __name__ == "__main__":
     model = Model()
     root = tk.Tk()
 
-    view = View(root)
-    controller = Controller(model, view)
+    controller = Controller(model, None)
+    view = View(root, controller)
+    controller.view = view
 
     # Thread para coletar dados
     threading.Thread(target=model.update_data, daemon=True).start()
